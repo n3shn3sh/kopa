@@ -33,7 +33,7 @@ func play(ev: Dictionary) -> void:
 ## cinemática para planejar os planos). impact: quando o golpe acerta; total: fim do evento;
 ## flight: tempo de voo do projétil (0 se não houver).
 func estimate(ev: Dictionary, cls: String = "") -> Dictionary:
-	var cast_t := (0.30 if cls == "arqueiro" else 0.34) / speed
+	var cast_t := (0.30 if cls == "arqueiro" else 0.36) / speed   # mesmas durações de UnitView.cast
 	var rest := settle / speed
 	match ev["t"]:
 		"move":
@@ -50,13 +50,13 @@ func estimate(ev: Dictionary, cls: String = "") -> Dictionary:
 					var fly := _flight_time(Arena.to_world(ev["from"]), Arena.to_world(ev["target"]), ab["anim"] == "arco")
 					return {"impact": cast_t + fly, "total": cast_t + fly + rest, "flight": fly}
 		"turret":
-			var fly := _flight_time(Arena.to_world(ev["from"]), Arena.to_world(ev["target"]), false)
+			var fly := _flight_time(Arena.to_world(ev["from"]), Arena.to_world(ev["target"]), false, 1.0)
 			return {"impact": fly, "total": fly + rest, "flight": fly}
 	return {"impact": 0.0, "total": 0.0, "flight": 0.0}
 
 
-func _flight_time(a: Vector3, b: Vector3, arc: bool) -> float:
-	var length := (a + Vector3(0, 1.1, 0)).distance_to(b + Vector3(0, 0.9, 0))
+func _flight_time(a: Vector3, b: Vector3, arc: bool, from_h: float = 1.1) -> float:
+	var length := (a + Vector3(0, from_h, 0)).distance_to(b + Vector3(0, 0.9, 0))
 	return clampf(length / 22.0, 0.18, 0.6) * (1.6 if arc else 1.0) / speed
 
 

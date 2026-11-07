@@ -39,6 +39,13 @@ godot --headless --path . -- --cine-test --seed=7
 godot --path . --resolution 1600x900 -- --cine-test=/caminho/da/pasta --seed=7
 ```
 
+Teste de estresse da lógica (milhares de comandos aleatórios, válidos e inválidos, conferindo
+as regras a cada passo e o determinismo do registro):
+
+```bash
+godot --headless --path . --script res://tests/fuzz_match.gd -- 50 1
+```
+
 Para gerar as imagens de vitrine (personagens e cenário) numa pasta:
 
 ```bash

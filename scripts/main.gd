@@ -468,6 +468,7 @@ func _run_cine_test() -> void:
 		get_tree().quit()
 		return
 	cine.verbose = false
+	cine.preview_from = -1   # os testes de rever/pular usam a montagem em velocidade normal
 	# rever e pular no meio da montagem
 	_replay()
 	await get_tree().create_timer(3.0, true, false, true).timeout

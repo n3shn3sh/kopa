@@ -281,9 +281,16 @@ func _final_args(kind: String) -> Array:
 	var base: float = _final["side"]
 	var cands := []
 	# sem passar de 90° do eixo: a direção do golpe na tela não se inverte entre os planos
+	# e nunca além de MAX_YAW: a câmera continua do lado do público (regra dos 180°)
+	var seen := {}
 	for dy in [0.0, -18.0, 18.0, -36.0, 36.0, -54.0, 54.0, -70.0, 70.0]:
+		var yaw := clampf(base + dy * DEG, -CinematicCamera.MAX_YAW, CinematicCamera.MAX_YAW)
+		var yk := roundi(yaw / DEG)
+		if seen.has(yk):
+			continue
+		seen[yk] = true
 		for p in [[-4.0, 0.0], [5.0, 0.6], [14.0, 2.0], [24.0, 5.0], [34.0, 9.0], [46.0, 14.0]]:
-			cands.append(Vector3(base + dy * DEG, p[0] * DEG, absf(dy) * 0.06 + p[1]))
+			cands.append(Vector3(yaw, p[0] * DEG, absf(yaw - base) / DEG * 0.06 + p[1]))
 	var v_lb := 1.0 - 2.0 * GameHUD.LETTERBOX
 	var caption_box := Rect2(-0.62, -0.36, 1.24, 0.36 + v_lb * 0.78)
 	var to_right: float = 1.0 if _final["target_right"] else -1.0
@@ -368,6 +375,7 @@ func _prepare(run: int) -> void:
 	keys.sort()
 	var finals := ["final_atirador", "final_alvo"] if _final.get("far", false) else ["final_dois"]
 	keys.append_array(finals + ["revelacao"])
+	var frame_t0 := Time.get_ticks_usec()
 	for k in keys:
 		if run != _run or not running:
 			return
@@ -379,6 +387,12 @@ func _prepare(run: int) -> void:
 			return
 		if not _poses.has(k):
 			_poses[k] = pose
+		# orçamento por quadro (não por plano): cede o quadro quando passar de 2,5 ms
+		if Time.get_ticks_usec() - frame_t0 > 2500:
+			await get_tree().process_frame
+			frame_t0 = Time.get_ticks_usec()
+			if run != _run or not running:
+				return
 
 
 ## Yaw que olha de lado para o eixo principal dos sujeitos (sem cruzar para o lado -Z).
@@ -402,7 +416,9 @@ func _axis_yaw(subjects: Array) -> float:
 		return 0.0
 	var aniso := sqrt((sxx - szz) * (sxx - szz) + 4.0 * sxz * sxz) / total
 	var a := 0.5 * atan2(2.0 * sxz, sxx - szz)
-	return clampf(-a * clampf(aniso * 1.4, 0.0, 1.0), -40.0 * DEG, 40.0 * DEG)
+	# perto de ±90° (eixo ao longo de Z) o sinal de `a` vira ruído: o peso cos(a) leva a 0
+	# (vista de frente) de forma contínua, sem saltos de 80° entre planos parecidos
+	return clampf(-a * clampf(aniso * 1.4, 0.0, 1.0) * cos(a), -40.0 * DEG, 40.0 * DEG)
 
 
 # ---------------------------------------------------------------- planejamento
@@ -426,9 +442,12 @@ func _plan(state: MatchState) -> void:
 		if ev.get("final", false):
 			_final = _final_data(ev, units, player)
 			# o turno do golpe final ganha plano próprio (preparação: quem vai bater e o alvo)
-			if not beat.is_empty() and beat["dur"] >= 0.3:
-				beat["force"] = true
+			if not beat.is_empty():
 				beat["subjects"].append(_final["victim"])
+				if beat["dur"] >= 0.3:
+					beat["force"] = true
+				else:
+					beat["join"] = true   # curto demais para plano próprio: entra no plano anterior
 			_simulate(ev, units)
 			break
 		if ev["t"] == "turn" or beat.is_empty():
@@ -452,8 +471,8 @@ func _plan(state: MatchState) -> void:
 		if cur.is_empty():
 			cur = _shot_from(b)
 			continue
-		var merge := false
-		if not b.get("force", false):
+		var merge: bool = b.get("join", false)
+		if not merge and not b.get("force", false):
 			var size := camera.size_of(cur["subjects"] + b["subjects"])
 			if cur["dur"] < MIN_HOLD:
 				merge = size <= HARD_SIZE
