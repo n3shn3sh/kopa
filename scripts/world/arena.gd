@@ -7,6 +7,7 @@ const T := GameData.TILE
 
 var marks: Dictionary = {}       # Vector2i -> MeshInstance3D
 var mark_mats: Dictionary = {}
+var scenery: Scenery
 
 
 static func to_world(p: Vector2i) -> Vector3:
@@ -38,7 +39,7 @@ func build(state: MatchState) -> void:
 	marks.clear()
 	_make_mark_mats()
 
-	var scenery := Scenery.new()
+	scenery = Scenery.new()
 	add_child(scenery)
 	scenery.build(Vector3(-T * 0.5, 0, -T * 0.5), Vector3((GameData.GRID_W - 0.5) * T, 0, (GameData.GRID_H - 0.5) * T))
 

@@ -6,6 +6,10 @@ extends Node
 signal focus(points: Array)
 signal event_started(ev: Dictionary)
 signal impact(ev: Dictionary)
+signal fog_started(ev: Dictionary)
+
+const FOG_COLOR := Color(0.72, 0.55, 1.0)
+const FOG_DESCENT := 1.6     # duração da descida da névoa (segundos de jogo, velocidade 1)
 
 var views: Dictionary = {}
 var fx_root: Node3D
@@ -27,6 +31,11 @@ func play(ev: Dictionary) -> void:
 			await _ability(ev)
 		"turret":
 			await _turret(ev)
+		"fog_start":
+			fog_started.emit(ev)
+			await _wait(FOG_DESCENT / speed)
+		"fog":
+			await _fog(ev)
 
 
 ## Duração estimada de um evento na velocidade atual, em segundos de jogo (usada pela
@@ -49,6 +58,10 @@ func estimate(ev: Dictionary, cls: String = "") -> Dictionary:
 				"projetil", "arco":
 					var fly := _flight_time(Arena.to_world(ev["from"]), Arena.to_world(ev["target"]), ab["anim"] == "arco")
 					return {"impact": cast_t + fly, "total": cast_t + fly + rest, "flight": fly}
+		"fog_start":
+			return {"impact": 0.0, "total": FOG_DESCENT / speed, "flight": 0.0}
+		"fog":
+			return {"impact": 0.2 / speed, "total": 0.2 / speed + rest, "flight": 0.0}
 		"turret":
 			var fly := _flight_time(Arena.to_world(ev["from"]), Arena.to_world(ev["target"]), false, 1.0)
 			return {"impact": fly, "total": fly + rest, "flight": fly}
@@ -128,7 +141,21 @@ func _turret(ev: Dictionary) -> void:
 		await _wait(settle / speed)
 
 
-func _apply_hits(ev: Dictionary) -> void:
+## Névoa: redemoinho roxo em volta do personagem e o dano.
+func _fog(ev: Dictionary) -> void:
+	var v: UnitView = views.get(ev["unit"])
+	if v == null:
+		return
+	focus.emit([v.position])
+	_burst(v.position + Vector3(0, 0.6, 0), FOG_COLOR, 18)
+	await _wait(0.2 / speed)
+	impact.emit(ev)
+	_apply_hits(ev, FOG_COLOR)
+	if settle > 0.0:
+		await _wait(settle / speed)
+
+
+func _apply_hits(ev: Dictionary, dmg_color: Color = Color(1.0, 0.45, 0.4)) -> void:
 	for h in ev["hits"]:
 		var hv: UnitView = views.get(h["unit"])
 		if hv == null:
@@ -137,7 +164,7 @@ func _apply_hits(ev: Dictionary) -> void:
 		if h["dmg"] > 0:
 			hv.hit_flash()
 			var crit: bool = h.get("crit", false)
-			_float_text(pos, ("CRÍTICO -%d" if crit else "-%d") % h["dmg"], Color(1.0, 0.45, 0.4), crit)
+			_float_text(pos, ("CRÍTICO -%d" if crit else "-%d") % h["dmg"], dmg_color, crit)
 			_burst(pos + Vector3(0, 1.0, 0), Color(1.0, 0.5, 0.4), 22 if crit else 12)
 		if h["heal"] > 0:
 			_float_text(pos, "+%d" % h["heal"], Color(0.5, 1.0, 0.55), false)

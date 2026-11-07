@@ -6,6 +6,12 @@ extends Node3D
 var lights: Array = []
 var flags: Array = []
 var clouds: Node3D
+var fog_root: Node3D
+var fog_layers: Array = []
+var fog_mats: Array = []
+var fog_wisps: CPUParticles3D
+var _fog_on := false
+var _fog_tween: Tween
 var _t := 0.0
 
 
@@ -133,6 +139,8 @@ func build(arena_min: Vector3, arena_max: Vector3) -> void:
 			LowPoly.part(clouds, LowPoly.prim("sphere", 1.0, 0, 0, 7, 4), Color(1, 1, 1), cp + Vector3((b - 1) * s * 1.1, (1 - absi(b - 1)) * s * 0.35, 0),
 				Vector3.ZERO, Vector3(s * (1.2 - absi(b - 1) * 0.3), s * 0.7, s), false, 0.25, 0.1, k * 3 + b)
 
+	_build_fog(c, psize)
+
 	# folhas caindo sobre a arena
 	var leaves := CPUParticles3D.new()
 	leaves.amount = 40
@@ -153,6 +161,81 @@ func build(arena_min: Vector3, arena_max: Vector3) -> void:
 	add_child(leaves)
 
 
+## Névoa: camadas translúcidas roxas que descem sobre o platô e fiapos que flutuam.
+const FOG_HEIGHTS := [0.35, 0.95, 1.7]
+const FOG_TOP := 14.0
+
+
+func _build_fog(c: Vector3, psize: Vector3) -> void:
+	fog_root = Node3D.new()
+	fog_root.position = c
+	fog_root.visible = false
+	add_child(fog_root)
+	for i in FOG_HEIGHTS.size():
+		var m := StandardMaterial3D.new()
+		m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		m.cull_mode = BaseMaterial3D.CULL_DISABLED
+		m.albedo_color = Color(0.58, 0.46, 0.78, 0.0)
+		var layer := MeshInstance3D.new()
+		var pm := PlaneMesh.new()
+		pm.size = Vector2(psize.x + 6.0, psize.z + 6.0)
+		layer.mesh = pm
+		layer.material_override = m
+		layer.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		layer.position.y = FOG_TOP + i * 2.0
+		fog_root.add_child(layer)
+		fog_layers.append(layer)
+		fog_mats.append(m)
+	fog_wisps = CPUParticles3D.new()
+	fog_wisps.amount = 60
+	fog_wisps.lifetime = 6.0
+	fog_wisps.preprocess = 6.0
+	fog_wisps.emission_shape = CPUParticles3D.EMISSION_SHAPE_BOX
+	fog_wisps.emission_box_extents = Vector3(psize.x * 0.5, 0.6, psize.z * 0.5)
+	fog_wisps.position.y = 0.8
+	fog_wisps.direction = Vector3(1, 0.1, 0.4)
+	fog_wisps.spread = 40.0
+	fog_wisps.gravity = Vector3.ZERO
+	fog_wisps.initial_velocity_min = 0.3
+	fog_wisps.initial_velocity_max = 0.8
+	fog_wisps.scale_amount_min = 2.0
+	fog_wisps.scale_amount_max = 4.0
+	fog_wisps.mesh = LowPoly.facet(LowPoly.prim("sphere", 0.3, 0, 0, 6, 3))
+	var wm := StandardMaterial3D.new()
+	wm.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	wm.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	wm.albedo_color = Color(0.62, 0.5, 0.82, 0.12)
+	fog_wisps.material_override = wm
+	fog_wisps.emitting = false
+	fog_root.add_child(fog_wisps)
+
+
+func set_fog(on: bool, instant: bool = false) -> void:
+	if fog_root == null or (on == _fog_on and not instant):
+		return
+	_fog_on = on
+	if _fog_tween:
+		_fog_tween.kill()
+	fog_wisps.emitting = on
+	var dur := 0.0 if instant else 1.6
+	if on:
+		fog_root.visible = true
+	if dur == 0.0:
+		for i in fog_layers.size():
+			fog_layers[i].position.y = FOG_HEIGHTS[i] if on else FOG_TOP + i * 2.0
+			fog_mats[i].albedo_color.a = 0.16 if on else 0.0
+		fog_root.visible = on
+		return
+	_fog_tween = create_tween().set_parallel(true)
+	for i in fog_layers.size():
+		var y: float = FOG_HEIGHTS[i] if on else FOG_TOP + i * 2.0
+		_fog_tween.tween_property(fog_layers[i], "position:y", y, dur).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+		_fog_tween.tween_property(fog_mats[i], "albedo_color:a", 0.16 if on else 0.0, dur)
+	if not on:
+		_fog_tween.chain().tween_callback(func() -> void: fog_root.visible = false)
+
+
 func _process(delta: float) -> void:
 	_t += delta
 	for i in lights.size():
@@ -161,3 +244,6 @@ func _process(delta: float) -> void:
 		flags[i].rotation.y = sin(_t * 2.2 + i) * 0.18
 	if clouds:
 		clouds.rotation.y += delta * 0.01
+	if _fog_on:
+		for i in fog_layers.size():
+			fog_layers[i].rotation.y = sin(_t * 0.07 + i * 2.0) * 0.06

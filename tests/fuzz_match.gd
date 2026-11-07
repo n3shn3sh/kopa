@@ -169,6 +169,8 @@ func _check(s: MatchState, sd: int) -> void:
 	# só os eventos novos desde a última checagem (evita custo quadrático)
 	for i in range(_seen_events, s.events.size()):
 		var ev: Dictionary = s.events[i]
+		if ev["t"] == "fog" and (ev["hits"][0]["dmg"] <= 0 or s.round_no < GameData.FOG_START_ROUND):
+			_fail("dano da névoa inválido ou antes da hora", sd)
 		if ev["t"] == "ability" or ev["t"] == "turret":
 			for h in ev["hits"]:
 				if h["dmg"] < 0 or h["heal"] < 0:

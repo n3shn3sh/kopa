@@ -50,7 +50,19 @@ func _mirror(p: Vector2i) -> Vector2i:
 
 
 func snapshot() -> Dictionary:
-	return {"units": units.duplicate(true), "obstacles": obstacles.duplicate()}
+	return {"units": units.duplicate(true), "obstacles": obstacles.duplicate(), "fog": fog_active()}
+
+
+## A névoa já desceu?
+func fog_active() -> bool:
+	return round_no >= GameData.FOG_START_ROUND
+
+
+## Dano da névoa nesta rodada (cresce a cada rodada para garantir que a partida termine).
+func fog_damage() -> int:
+	if not fog_active():
+		return 0
+	return GameData.FOG_BASE_DAMAGE + (round_no - GameData.FOG_START_ROUND) * GameData.FOG_DAMAGE_STEP
 
 
 func _add_unit(cls: String, player: int, pos: Vector2i, owner_id: int = -1) -> Dictionary:
@@ -285,7 +297,7 @@ func _resolve_hit(src: Dictionary, ab: Dictionary, v: Dictionary) -> Dictionary:
 		if ab.has("execucao") and float(v["hp"]) / v["max_hp"] < ab["execucao"]:
 			dmg *= 2.0
 			hit["exec"] = true
-		if rng.randf() < GameData.CRIT_CHANCE:
+		if not ab.get("sem_critico", false) and rng.randf() < GameData.CRIT_CHANCE:
 			dmg *= GameData.CRIT_MULT
 			hit["crit"] = true
 		if v["muralha"]:
@@ -363,7 +375,16 @@ func _auto_end() -> void:
 ## jogadores se alternam (J1, J2, J1, J2...). Começa quem tem a maior iniciativa;
 ## no empate, quem começa alterna a cada rodada.
 func _start_round() -> void:
+	# fim da rodada anterior: torretas cujo engenheiro morreu continuam atirando, uma vez por rodada
+	if round_no > 0:
+		for t in units.values():
+			if t["alive"] and t["structure"] and not units.get(t["owner"], {}).get("alive", false):
+				_turret_fire(t)
+				if winner >= 0:
+					return
 	round_no += 1
+	if round_no == GameData.FOG_START_ROUND:
+		_log({"t": "fog_start", "round": round_no, "dmg": fog_damage()})
 	var lists := [[], []]
 	for u in units.values():
 		if u["alive"] and not u["structure"]:
@@ -388,14 +409,30 @@ func _start_round() -> void:
 
 
 func _begin_next_turn() -> void:
-	var u := {}
-	while u.is_empty():
-		if turn_queue.is_empty():
-			_start_round()
-		var id: int = turn_queue.pop_front()
-		var c: Dictionary = units.get(id, {})
-		if not c.is_empty() and c["alive"]:
-			u = c
+	while winner < 0:
+		var u := {}
+		while u.is_empty():
+			if turn_queue.is_empty():
+				_start_round()
+				if winner >= 0:
+					return
+			var id: int = turn_queue.pop_front()
+			var c: Dictionary = units.get(id, {})
+			if not c.is_empty() and c["alive"]:
+				u = c
+		_start_turn(u)
+		# névoa: dano no início do turno; se o personagem cair, a vez passa para o próximo
+		if fog_active():
+			var ev := {"t": "fog", "unit": u["id"], "from": u["pos"], "target": u["pos"], "dmg": fog_damage(),
+				"hits": [_resolve_hit(u, {"dano": fog_damage(), "sem_critico": true}, u)]}
+			_log(ev)
+			_check_victory(ev)
+			if not u["alive"]:
+				continue
+		return
+
+
+func _start_turn(u: Dictionary) -> void:
 	active_id = u["id"]
 	turn_no += 1
 	acted = false

@@ -18,6 +18,8 @@ var hover := Vector2i(-99, -99)
 var autoplay := false
 var time_mult := 1.0
 var _showcase_dir := ""
+var env: Environment
+var _fog_tween: Tween
 var _cine_test := false
 var _cine_dir := ""
 var _cine_final := false
@@ -60,6 +62,7 @@ func _ready() -> void:
 	player.views = views
 	player.fx_root = fx_root
 	player.spawn_view = spawn_view
+	player.fog_started.connect(_on_fog_started)
 	add_child(player)
 	cine = CinematicDirector.new()
 	cine.main = self
@@ -89,7 +92,7 @@ func _build_environment() -> void:
 	sky_mat.sun_angle_max = 20.0
 	var sky := Sky.new()
 	sky.sky_material = sky_mat
-	var env := Environment.new()
+	env = Environment.new()
 	env.background_mode = Environment.BG_SKY
 	env.sky = sky
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_SKY
@@ -135,12 +138,42 @@ func new_match() -> void:
 	_turn_started()
 
 
+## Névoa no visual: camadas roxas no cenário e neblina do ambiente mais densa e arroxeada.
+func set_fog(on: bool, instant: bool = false) -> void:
+	if arena.scenery:
+		arena.scenery.set_fog(on, instant)
+	if env == null:
+		return
+	var density := 0.02 if on else 0.0018
+	var color := Color(0.55, 0.48, 0.7) if on else Color(0.78, 0.85, 0.95)
+	if _fog_tween:
+		_fog_tween.kill()
+	if instant:
+		env.fog_density = density
+		env.fog_light_color = color
+		return
+	_fog_tween = create_tween()
+	_fog_tween.tween_property(env, "fog_density", density, 1.6)
+	_fog_tween.parallel().tween_property(env, "fog_light_color", color, 1.6)
+
+
+func _on_fog_started(ev: Dictionary) -> void:
+	set_fog(true)
+	if cine.running:
+		return
+	hud.show_caption("A névoa desceu", "%d de dano por turno, mais %d a cada rodada" % [ev["dmg"], GameData.FOG_DAMAGE_STEP])
+	await get_tree().create_timer(2.6).timeout
+	if not cine.running:
+		hud.hide_caption()
+
+
 func rebuild_views(snap: Dictionary) -> void:
 	for c in units_root.get_children():
 		c.queue_free()
 	for c in fx_root.get_children():
 		c.queue_free()
 	views.clear()
+	set_fog(snap.get("fog", false), true)
 	for u in snap["units"].values():
 		if u["alive"]:
 			spawn_view(u)
@@ -244,6 +277,12 @@ func describe(ev: Dictionary) -> String:
 	match ev["t"]:
 		"move":
 			return "%s se move." % state.display_name(state.units[ev["unit"]])
+		"fog_start":
+			return "A névoa desceu: %d de dano por turno, mais %d a cada rodada." % [ev["dmg"], GameData.FOG_DAMAGE_STEP]
+		"fog":
+			var fh: Dictionary = ev["hits"][0]
+			return "A névoa fere %s: -%d%s." % [state.display_name(state.units[ev["unit"]]), fh["dmg"],
+				" (abatido)" if fh["killed"] else ""]
 		"ability", "turret":
 			var who := state.display_name(state.units[ev["unit"]])
 			var nm: String = "dispara" if ev["t"] == "turret" else "usa " + GameData.ABILITIES[ev["ab"]]["nome"]

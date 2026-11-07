@@ -46,6 +46,12 @@ as regras a cada passo e o determinismo do registro):
 godot --headless --path . --script res://tests/fuzz_match.gd -- 50 1
 ```
 
+Duração média das partidas (IA contra IA), abates pela névoa e sementes de exemplo:
+
+```bash
+godot --headless --path . --script res://tests/sim_length.gd -- 300 1
+```
+
 Para gerar as imagens de vitrine (personagens e cenário) numa pasta:
 
 ```bash
@@ -98,6 +104,12 @@ Para trocar por modelos feitos em Blender, basta mudar `unit_view.gd`.
   em qualquer ordem. O turno acaba sozinho quando as duas coisas são feitas.
 - Distâncias em quadrados (sem diagonal). Obstáculos bloqueiam movimento e linha de visão.
 - Vitória: eliminar os 5 personagens do rival (a torreta não conta).
+- **Névoa:** a partir da rodada 14 desce uma névoa que causa dano a cada personagem no início
+  do turno dele: 8 na primeira rodada de névoa e mais 4 a cada rodada. A rodada 14 é a duração
+  média medida em 300 partidas da IA contra ela mesma (14,3 rodadas; `tests/sim_length.gd`).
+  Com a névoa, toda partida termina (no teste, no máximo 22 rodadas).
+- **Torreta:** atira no fim de cada turno do engenheiro. Se o engenheiro morrer, ela continua
+  atirando uma vez por rodada, no fim da rodada.
 
 | Classe | Vida | Mov. | Inic. | Habilidade 1 | Habilidade 2 |
 | --- | --- | --- | --- | --- | --- |

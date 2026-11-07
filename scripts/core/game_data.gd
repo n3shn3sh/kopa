@@ -13,6 +13,12 @@ const CRIT_MULT := 1.5
 const TURRET_RANGE := 4
 const TURRET_DAMAGE := 10
 
+## Névoa: a partir desta rodada desce uma névoa que causa dano a cada personagem no
+## início do turno dele. O dano cresce a cada rodada, garantindo que a partida termine.
+const FOG_START_ROUND := 14      # média medida em 300 partidas IA x IA: 14,3 rodadas (tests/sim_length.gd)
+const FOG_BASE_DAMAGE := 8
+const FOG_DAMAGE_STEP := 4
+
 const TEAM_COLORS := [Color(0.25, 0.78, 1.0), Color(1.0, 0.36, 0.42)]
 const TEAM_NAMES := ["Jogador 1", "Jogador 2"]
 

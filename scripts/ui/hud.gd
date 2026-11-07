@@ -272,7 +272,12 @@ func update(state: MatchState, mode: String) -> void:
 	if u.is_empty():
 		return
 	var team: Color = GameData.TEAM_COLORS[u["player"]]
-	top_label.text = "Rodada %d · Turno %d · Vez do %s" % [state.round_no, state.turn_no, GameData.TEAM_NAMES[u["player"]]]
+	var fog := ""
+	if state.fog_active():
+		fog = " · Névoa: %d por turno" % state.fog_damage()
+	elif GameData.FOG_START_ROUND - state.round_no <= 3:
+		fog = " · Névoa em %d rodada%s" % [GameData.FOG_START_ROUND - state.round_no, "" if GameData.FOG_START_ROUND - state.round_no == 1 else "s"]
+	top_label.text = "Rodada %d · Turno %d · Vez do %s%s" % [state.round_no, state.turn_no, GameData.TEAM_NAMES[u["player"]], fog]
 	top_label.add_theme_color_override("font_color", team)
 
 	for c in queue_box.get_children():

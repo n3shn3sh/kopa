@@ -197,9 +197,12 @@ func _on_impact(ev: Dictionary) -> void:
 	phase = "congelado"
 	_set_scale(FREEZE)
 	var who: Dictionary = main.state.units.get(ev["unit"], {})
-	var nome: String = "Torreta" if ev["t"] == "turret" else GameData.ABILITIES[ev["ab"]]["nome"]
 	var quem: String = main.state.display_name(who) if not who.is_empty() else ""
-	main.hud.show_caption("GOLPE FINAL", "%s · %s" % [quem, nome] if quem != "" else nome)
+	if ev["t"] == "fog":
+		main.hud.show_caption("GOLPE FINAL", "A névoa derruba %s" % quem if quem != "" else "Névoa")
+	else:
+		var nome: String = "Torreta" if ev["t"] == "turret" else GameData.ABILITIES[ev["ab"]]["nome"]
+		main.hud.show_caption("GOLPE FINAL", "%s · %s" % [quem, nome] if quem != "" else nome)
 	await _real_wait(FREEZE_TIME)
 	if run != _run or skipping or not running:
 		return
@@ -536,7 +539,7 @@ func _collect(ev: Dictionary, units: Dictionary, out: Array) -> void:
 				return
 			for p in ev["path"]:
 				out.append(_subject(actor, Arena.to_world(p)))
-		"ability", "turret":
+		"ability", "turret", "fog":
 			if not actor.is_empty():
 				out.append(_subject(actor, Arena.to_world(ev.get("from", Vector2i.ZERO))))
 			var area: bool = ev["t"] == "ability" and GameData.ABILITIES[ev["ab"]]["anim"] == "arco"
@@ -560,7 +563,7 @@ func _simulate(ev: Dictionary, units: Dictionary) -> void:
 		"move":
 			if units.has(id) and not ev["path"].is_empty():
 				units[id]["pos"] = Arena.to_world(ev["path"][-1])
-		"ability", "turret":
+		"ability", "turret", "fog":
 			for h in ev.get("hits", []):
 				if not units.has(h["unit"]):
 					continue
