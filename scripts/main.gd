@@ -21,6 +21,7 @@ var _showcase_dir := ""
 var _cine_test := false
 var _cine_dir := ""
 var _cine_final := false
+var _cine_video := false
 var _seed := -1
 var _capturing := false
 
@@ -36,6 +37,9 @@ func _ready() -> void:
 		if a.begins_with("--shots="):
 			time_mult = 2.0
 			_capture_loop(a.substr(8))
+		if a == "--cine-video":
+			_cine_test = true
+			_cine_video = true
 		if a == "--cine-test" or a.begins_with("--cine-test="):
 			_cine_test = true
 			_cine_dir = a.substr(12)
@@ -458,6 +462,11 @@ func _run_cine_test() -> void:
 	await _final_blow()
 	_capturing = false
 	print("CINE_TEST exibição completa: %.1f s, %d cortes" % [(Time.get_ticks_msec() - t0) / 1000.0, cine.cuts])
+	if _cine_video:
+		# gravação de vídeo (Movie Maker): mostra a tela de vitória um instante e fecha
+		await get_tree().create_timer(2.5, true, false, true).timeout
+		get_tree().quit()
+		return
 	cine.verbose = false
 	# rever e pular no meio da montagem
 	_replay()

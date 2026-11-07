@@ -28,6 +28,12 @@ Imprime cada plano escolhido e `CINE_TEST_OK` no fim. Com uma pasta, salva captu
 abertura, montagem, final, congelado, retomada, revelacao). `--seed=N` repete a mesma partida;
 `--cine-final` acelera a montagem e deixa só o trecho final em velocidade normal (para iterar no golpe final).
 
+Para gravar um vídeo da cinemática com o Movie Maker do Godot (`--cine-video` toca a cinemática uma vez e fecha):
+
+```bash
+godot --path . --resolution 1280x720 --write-movie cine.avi --fixed-fps 30 -- --cine-video --seed=7
+```
+
 ```bash
 godot --headless --path . -- --cine-test --seed=7
 godot --path . --resolution 1600x900 -- --cine-test=/caminho/da/pasta --seed=7
