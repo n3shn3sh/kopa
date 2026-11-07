@@ -1,6 +1,7 @@
 class_name Arena
 extends Node3D
-## Monta o tabuleiro 3D (quadrados, obstáculos) e as marcações de seleção.
+## Monta o tabuleiro 3D (quadrados de grama, obstáculos), o cenário em volta
+## e as marcações de seleção.
 
 const T := GameData.TILE
 
@@ -26,27 +27,28 @@ func build(state: MatchState) -> void:
 	marks.clear()
 	_make_mark_mats()
 
-	var ground := MeshInstance3D.new()
-	var pm := PlaneMesh.new()
-	pm.size = Vector2(140, 140)
-	ground.mesh = pm
-	ground.material_override = _mat(Color(0.06, 0.07, 0.09))
-	ground.position = center() + Vector3(0, -0.3, 0)
-	add_child(ground)
+	var scenery := Scenery.new()
+	add_child(scenery)
+	scenery.build(Vector3(-T * 0.5, 0, -T * 0.5), Vector3((GameData.GRID_W - 0.5) * T, 0, (GameData.GRID_H - 0.5) * T))
 
-	var tile_mesh := BoxMesh.new()
-	tile_mesh.size = Vector3(T * 0.96, 0.3, T * 0.96)
-	var mat_a := _mat(Color(0.23, 0.26, 0.24))
-	var mat_b := _mat(Color(0.19, 0.22, 0.2))
+	# quadrados de grama com leve variação de tom; faixa central de terra batida
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 99
+	var tile_mesh := LowPoly.facet(LowPoly.prim("box", T * 0.94, 0.3, T * 0.94))
+	var grass := Color(0.45, 0.68, 0.33)
+	var path := Color(0.78, 0.66, 0.45)
 	var mark_mesh := PlaneMesh.new()
-	mark_mesh.size = Vector2(T * 0.9, T * 0.9)
+	mark_mesh.size = Vector2(T * 0.88, T * 0.88)
 	for x in GameData.GRID_W:
 		for y in GameData.GRID_H:
 			var p := Vector2i(x, y)
 			var mi := MeshInstance3D.new()
 			mi.mesh = tile_mesh
-			mi.material_override = mat_a if (x + y) % 2 == 0 else mat_b
-			mi.position = to_world(p) + Vector3(0, -0.15, 0)
+			var on_path := absi(y * 2 - (GameData.GRID_H - 1)) <= 1 and x > 2 and x < GameData.GRID_W - 3
+			var base := path if on_path else grass
+			var col := base.lightened(rng.randf_range(0.0, 0.07)) if (x + y) % 2 == 0 else base.darkened(rng.randf_range(0.02, 0.08))
+			mi.material_override = LowPoly.mat(col)
+			mi.position = to_world(p) + Vector3(0, -0.16, 0)
 			add_child(mi)
 			var mk := MeshInstance3D.new()
 			mk.mesh = mark_mesh
@@ -55,34 +57,24 @@ func build(state: MatchState) -> void:
 			mk.visible = false
 			add_child(mk)
 			marks[p] = mk
+			if not on_path and not state.obstacles.has(p) and rng.randf() < 0.18:
+				Props.tuft(self, to_world(p) + Vector3(rng.randf_range(-0.7, 0.7), 0, rng.randf_range(-0.7, 0.7)), rng)
 
-	var rock := _mat(Color(0.34, 0.32, 0.38))
-	var rng := RandomNumberGenerator.new()
-	rng.seed = 7
+	# obstáculos: rochas, ruínas e árvores (mesmo tipo nos dois lados, por simetria)
 	for p in state.obstacles.keys():
-		var mi := MeshInstance3D.new()
-		var bm := BoxMesh.new()
-		var h := rng.randf_range(1.2, 2.4)
-		bm.size = Vector3(T * 0.86, h, T * 0.86)
-		mi.mesh = bm
-		mi.material_override = rock
-		mi.position = to_world(p) + Vector3(0, h * 0.5, 0)
-		mi.rotation.y = rng.randf_range(-0.15, 0.15)
-		add_child(mi)
-
-	# faixas de base de cada time
-	for player in 2:
-		var strip := MeshInstance3D.new()
-		var sm := BoxMesh.new()
-		sm.size = Vector3(0.25, 0.1, GameData.GRID_H * T)
-		strip.mesh = sm
-		var m := _mat(GameData.TEAM_COLORS[player])
-		m.emission_enabled = true
-		m.emission = GameData.TEAM_COLORS[player]
-		strip.material_override = m
-		var x := -T * 0.6 if player == 0 else (GameData.GRID_W - 1) * T + T * 0.6
-		strip.position = Vector3(x, 0.0, center().z)
-		add_child(strip)
+		var q: Vector2i = p
+		var canon := q if q.x * GameData.GRID_H + q.y < (GameData.GRID_W - 1 - q.x) * GameData.GRID_H + (GameData.GRID_H - 1 - q.y) \
+			else Vector2i(GameData.GRID_W - 1 - q.x, GameData.GRID_H - 1 - q.y)
+		var kind := (canon.x * 7 + canon.y * 13) % 3
+		var orng := RandomNumberGenerator.new()
+		orng.seed = canon.x * 31 + canon.y
+		match kind:
+			0:
+				Props.rock_cluster(self, to_world(q), orng)
+			1:
+				Props.ruin_pillar(self, to_world(q), orng)
+			2:
+				Props.pine(self, to_world(q), 1.5, orng)
 
 
 func show_marks(m: Dictionary) -> void:
@@ -100,9 +92,9 @@ func clear_marks() -> void:
 
 func _make_mark_mats() -> void:
 	var defs := {
-		"move": Color(0.3, 0.65, 1.0, 0.35), "path": Color(0.85, 0.95, 1.0, 0.65),
-		"target": Color(1.0, 0.3, 0.3, 0.35), "area": Color(1.0, 0.6, 0.2, 0.65),
-		"active": Color(1.0, 0.85, 0.3, 0.6),
+		"move": Color(0.3, 0.65, 1.0, 0.4), "path": Color(0.9, 0.97, 1.0, 0.7),
+		"target": Color(1.0, 0.3, 0.3, 0.4), "area": Color(1.0, 0.6, 0.2, 0.7),
+		"active": Color(1.0, 0.85, 0.3, 0.65),
 	}
 	for k in defs:
 		var m := StandardMaterial3D.new()
@@ -110,10 +102,3 @@ func _make_mark_mats() -> void:
 		m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 		m.albedo_color = defs[k]
 		mark_mats[k] = m
-
-
-func _mat(c: Color) -> StandardMaterial3D:
-	var m := StandardMaterial3D.new()
-	m.albedo_color = c
-	m.roughness = 0.9
-	return m

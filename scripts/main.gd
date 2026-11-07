@@ -16,6 +16,7 @@ var mode := "move"
 var hover := Vector2i(-99, -99)
 var autoplay := false
 var time_mult := 1.0
+var _showcase_dir := ""
 
 
 func _ready() -> void:
@@ -24,6 +25,8 @@ func _ready() -> void:
 	if autoplay:
 		time_mult = 6.0
 	for a in args:
+		if a.begins_with("--showcase="):
+			_showcase_dir = a.substr(11)
 		if a.begins_with("--shots="):
 			time_mult = 2.0
 			_capture_loop(a.substr(8))
@@ -54,26 +57,44 @@ func _ready() -> void:
 	hud.new_match_pressed.connect(new_match)
 	hud.skip_pressed.connect(cine.skip)
 	new_match()
+	if _showcase_dir != "":
+		_showcase()
 
 
 func _build_environment() -> void:
+	var sky_mat := ProceduralSkyMaterial.new()
+	sky_mat.sky_top_color = Color(0.3, 0.55, 0.9)
+	sky_mat.sky_horizon_color = Color(0.72, 0.82, 0.94)
+	sky_mat.ground_horizon_color = Color(0.8, 0.86, 0.95)
+	sky_mat.ground_bottom_color = Color(0.25, 0.4, 0.5)
+	sky_mat.sun_angle_max = 20.0
+	var sky := Sky.new()
+	sky.sky_material = sky_mat
 	var env := Environment.new()
-	env.background_mode = Environment.BG_COLOR
-	env.background_color = Color(0.05, 0.06, 0.09)
-	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-	env.ambient_light_color = Color(0.55, 0.6, 0.75)
-	env.ambient_light_energy = 0.6
-	env.tonemap_mode = Environment.TONE_MAPPER_ACES
+	env.background_mode = Environment.BG_SKY
+	env.sky = sky
+	env.ambient_light_source = Environment.AMBIENT_SOURCE_SKY
+	env.ambient_light_energy = 0.5
+	env.tonemap_mode = Environment.TONE_MAPPER_FILMIC
+	env.tonemap_exposure = 0.92
 	env.glow_enabled = true
-	env.glow_intensity = 0.6
+	env.glow_intensity = 0.3
+	env.glow_bloom = 0.0
+	env.fog_enabled = true
+	env.fog_light_color = Color(0.78, 0.85, 0.95)
+	env.fog_density = 0.0018
+	env.fog_sky_affect = 0.3
+	env.ssao_enabled = true
+	env.ssao_intensity = 1.2
 	var we := WorldEnvironment.new()
 	we.environment = env
 	add_child(we)
 	var sun := DirectionalLight3D.new()
-	sun.rotation_degrees = Vector3(-55, -35, 0)
-	sun.light_energy = 1.2
-	sun.light_color = Color(1.0, 0.95, 0.88)
+	sun.rotation_degrees = Vector3(-48, -32, 0)
+	sun.light_energy = 1.1
+	sun.light_color = Color(1.0, 0.94, 0.84)
 	sun.shadow_enabled = true
+	sun.directional_shadow_max_distance = 90.0
 	add_child(sun)
 
 
@@ -335,6 +356,49 @@ func _update_marks() -> void:
 
 
 # ---------------------------------------------------------------- teste automático
+
+## Gera imagens de vitrine (personagens e cenário) e fecha. Uso: -- --showcase=<pasta>
+func _showcase() -> void:
+	busy = true
+	hud.set_gameplay_visible(false)
+	await get_tree().create_timer(0.5).timeout
+	rig.enabled = false
+	var cam := rig.cam
+	# 1) fileira de personagens, de perto
+	rebuild_views({"units": {}})
+	var c := arena.center() + Vector3(0, -0.27, 13.0)
+	var i := 0
+	for player in 2:
+		for cls in GameData.ROSTER + ["torreta"]:
+			var u := {"id": 1000 + i, "cls": cls, "player": player, "pos": Vector2i.ZERO, "hp": 100, "max_hp": 100,
+				"structure": cls == "torreta", "muralha": false}
+			var v := spawn_view(u)
+			v.label.visible = false
+			v.position = c + Vector3((i % 6 - 2.5) * 1.6, 0, (player - 0.5) * 3.0)
+			v.rotation.y = 0.0
+			i += 1
+	cam.position = c + Vector3(0, 2.6, 9.5)
+	cam.look_at(c + Vector3(0, 0.8, 0))
+	await get_tree().create_timer(0.6).timeout
+	get_viewport().get_texture().get_image().save_png(_showcase_dir + "/vitrine_personagens.png")
+	cam.position = c + Vector3(-2.2, 1.6, 4.4)
+	cam.look_at(c + Vector3(-2.2, 0.9, 1.5))
+	await get_tree().create_timer(0.4).timeout
+	get_viewport().get_texture().get_image().save_png(_showcase_dir + "/vitrine_close.png")
+	# 2) visão de jogo
+	rebuild_views(state.snapshot())
+	rig.enabled = true
+	rig.snap_to(arena.center())
+	await get_tree().create_timer(0.6).timeout
+	get_viewport().get_texture().get_image().save_png(_showcase_dir + "/vitrine_jogo.png")
+	# 3) panorâmica do cenário
+	rig.enabled = false
+	cam.position = arena.center() + Vector3(-30, 16, 34)
+	cam.look_at(arena.center() + Vector3(0, -2, 0))
+	await get_tree().create_timer(0.6).timeout
+	get_viewport().get_texture().get_image().save_png(_showcase_dir + "/vitrine_cenario.png")
+	get_tree().quit()
+
 
 ## Salva capturas de tela periódicas (para revisão visual em testes automáticos).
 func _capture_loop(dir: String) -> void:

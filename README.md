@@ -5,7 +5,10 @@ Jogo tático PvP por turnos em Godot 4.3. Cada jogador controla 5 personagens
 estilo MOBA. O golpe que vence a partida não é encenado na hora: ele dispara uma
 cinemática da partida inteira, do primeiro turno até o golpe final.
 
-Os modelos são formas provisórias e os números de balanceamento são um ponto de partida.
+![Personagens](docs/vitrine_personagens.png)
+
+Visual low poly cartoon, todo gerado em código (sem arquivos de modelo): malhas facetadas,
+sombreado em faixas e contorno escuro. Os números de balanceamento são um ponto de partida.
 
 ## Como rodar
 
@@ -17,6 +20,34 @@ Teste automático, com a IA jogando pelos dois lados até a cinemática:
 ```bash
 godot --path . -- --autoplay
 ```
+
+Para gerar as imagens de vitrine (personagens e cenário) numa pasta:
+
+```bash
+godot --path . -- --showcase=/caminho/da/pasta
+```
+
+## Visual
+
+| Classe | Referência de design |
+| --- | --- |
+| Tanque | Cavaleiro pesado: elmo com viseira e penacho, ombreiras, escudo grande, maça |
+| Assassino | Capuz pontudo, rosto coberto, olhos brilhando, cachecol, duas adagas |
+| Arqueiro | Chapéu de caçador com pena, capa, aljava nas costas, arco longo |
+| Druida | Manto, barba, chifres com coroa de folhas, cajado com orbe verde brilhante |
+| Engenheiro | Capacete com óculos de proteção, mochila com chaminé e engrenagem, chave inglesa |
+
+A cor do time aparece nas peças de destaque (tabardo, escudo, cachecol, capa, faixa, cinto)
+e no anel aos pés de cada personagem.
+
+O cenário é um platô gramado sobre um lago, com ruínas, pedras e pinheiros como obstáculos,
+estandartes e braseiros nas bases, ilhas com árvores, montanhas ao fundo, nuvens e folhas caindo.
+
+![Cenário](docs/vitrine_cenario.png)
+
+Arquivos: `scripts/world/lowpoly.gd` (estilo), `character_builder.gd` (personagens),
+`props.gd` (peças de cenário), `scenery.gd` (cenário em volta), `arena.gd` (tabuleiro).
+Para trocar por modelos feitos em Blender, basta mudar `unit_view.gd`.
 
 ## Controles
 

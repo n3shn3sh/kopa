@@ -8,8 +8,8 @@ var target := Vector3.ZERO
 var cur := Vector3.ZERO
 var yaw := 0.0
 var pitch := deg_to_rad(55.0)
-var dist := 26.0
-var cur_dist := 26.0
+var dist := 22.0
+var cur_dist := 22.0
 var enabled := true
 var dragging := false
 
