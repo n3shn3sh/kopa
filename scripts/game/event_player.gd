@@ -29,6 +29,37 @@ func play(ev: Dictionary) -> void:
 			await _turret(ev)
 
 
+## Duração estimada de um evento na velocidade atual, em segundos de jogo (usada pela
+## cinemática para planejar os planos). impact: quando o golpe acerta; total: fim do evento;
+## flight: tempo de voo do projétil (0 se não houver).
+func estimate(ev: Dictionary, cls: String = "") -> Dictionary:
+	var cast_t := (0.30 if cls == "arqueiro" else 0.34) / speed
+	var rest := settle / speed
+	match ev["t"]:
+		"move":
+			var t := maxf(0.0, ev["path"].size() - 1) * 0.17 / speed
+			return {"impact": t, "total": t, "flight": 0.0}
+		"ability":
+			var ab: Dictionary = GameData.ABILITIES[ev["ab"]]
+			match ab["anim"]:
+				"melee":
+					return {"impact": 0.28 / speed, "total": 0.5 / speed + rest, "flight": 0.0}
+				"si", "invocar":
+					return {"impact": cast_t, "total": cast_t + rest, "flight": 0.0}
+				"projetil", "arco":
+					var fly := _flight_time(Arena.to_world(ev["from"]), Arena.to_world(ev["target"]), ab["anim"] == "arco")
+					return {"impact": cast_t + fly, "total": cast_t + fly + rest, "flight": fly}
+		"turret":
+			var fly := _flight_time(Arena.to_world(ev["from"]), Arena.to_world(ev["target"]), false)
+			return {"impact": fly, "total": fly + rest, "flight": fly}
+	return {"impact": 0.0, "total": 0.0, "flight": 0.0}
+
+
+func _flight_time(a: Vector3, b: Vector3, arc: bool) -> float:
+	var length := (a + Vector3(0, 1.1, 0)).distance_to(b + Vector3(0, 0.9, 0))
+	return clampf(length / 22.0, 0.18, 0.6) * (1.6 if arc else 1.0) / speed
+
+
 func _move(ev: Dictionary) -> void:
 	var v: UnitView = views.get(ev["unit"])
 	var path: Array = ev["path"]
@@ -119,7 +150,7 @@ func _apply_hits(ev: Dictionary) -> void:
 			hv.set_shield(true)
 		hv.set_hp(h["hp"])
 		if h.has("push"):
-			var t := create_tween()
+			var t := hv.create_tween()   # preso ao personagem: morre junto se a cena for refeita
 			t.tween_property(hv, "position", Arena.to_world(h["push"]), 0.2 / speed)
 		if h["killed"]:
 			hv.die(speed)
@@ -157,7 +188,7 @@ func _explosion(p: Vector3, color: Color) -> void:
 	fx_root.add_child(ring)
 	ring.position = p + Vector3(0, 0.1, 0)
 	ring.scale = Vector3(0.2, 0.2, 0.2)
-	var tw := create_tween()
+	var tw := ring.create_tween()
 	tw.tween_property(ring, "scale", Vector3(3.0, 0.4, 3.0), 0.35 / speed)
 	tw.parallel().tween_property(mat, "albedo_color:a", 0.0, 0.35 / speed)
 	tw.tween_callback(ring.queue_free)
@@ -175,7 +206,7 @@ func _float_text(p: Vector3, text: String, color: Color, big: bool) -> void:
 	l.modulate = color
 	fx_root.add_child(l)
 	l.position = p + Vector3(0, 2.9, 0)
-	var tw := create_tween()
+	var tw := l.create_tween()
 	tw.tween_property(l, "position:y", l.position.y + 1.3, 0.9 / speed)
 	tw.parallel().tween_property(l, "modulate:a", 0.0, 0.9 / speed).set_delay(0.35 / speed)
 	tw.parallel().tween_property(l, "outline_modulate:a", 0.0, 0.9 / speed).set_delay(0.35 / speed)
@@ -201,7 +232,7 @@ func _burst(p: Vector3, color: Color, n: int) -> void:
 	fx_root.add_child(ps)
 	ps.position = p
 	ps.emitting = true
-	var tw := create_tween()
+	var tw := ps.create_tween()
 	tw.tween_interval(1.5)
 	tw.tween_callback(ps.queue_free)
 

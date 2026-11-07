@@ -13,6 +13,7 @@ signal skip_pressed
 const BG := Color(0.05, 0.06, 0.09, 0.88)
 const FG := Color(0.92, 0.94, 0.97)
 const MUTE := Color(0.62, 0.66, 0.74)
+const LETTERBOX := 0.11   # fração da altura coberta por cada faixa de cinema (a câmera da cinemática usa)
 
 var root: Control
 var top: PanelContainer
@@ -346,7 +347,7 @@ func set_gameplay_visible(on: bool) -> void:
 func set_cinematic(on: bool) -> void:
 	set_gameplay_visible(not on)
 	skip_btn.visible = on
-	var h := get_viewport().get_visible_rect().size.y * 0.11 if on else 0.0
+	var h := get_viewport().get_visible_rect().size.y * LETTERBOX if on else 0.0
 	var tw := create_tween()
 	tw.tween_property(bar_top, "offset_bottom", h, 0.6)
 	tw.parallel().tween_property(bar_bot, "offset_top", -h, 0.6)

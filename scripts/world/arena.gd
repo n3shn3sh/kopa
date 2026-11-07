@@ -17,6 +17,17 @@ func to_tile(w: Vector3) -> Vector2i:
 	return Vector2i(roundi(w.x / T), roundi(w.z / T))
 
 
+## Tipo do obstáculo no quadrado: 0 rochas, 1 ruína, 2 pinheiro (igual nos dois lados, por simetria).
+static func obstacle_kind(p: Vector2i) -> int:
+	var c := _canonical(p)
+	return (c.x * 7 + c.y * 13) % 3
+
+
+static func _canonical(q: Vector2i) -> Vector2i:
+	var m := Vector2i(GameData.GRID_W - 1 - q.x, GameData.GRID_H - 1 - q.y)
+	return q if q.x * GameData.GRID_H + q.y < m.x * GameData.GRID_H + m.y else m
+
+
 func center() -> Vector3:
 	return Vector3((GameData.GRID_W - 1) * T * 0.5, 0.0, (GameData.GRID_H - 1) * T * 0.5)
 
@@ -63,9 +74,8 @@ func build(state: MatchState) -> void:
 	# obstáculos: rochas, ruínas e árvores (mesmo tipo nos dois lados, por simetria)
 	for p in state.obstacles.keys():
 		var q: Vector2i = p
-		var canon := q if q.x * GameData.GRID_H + q.y < (GameData.GRID_W - 1 - q.x) * GameData.GRID_H + (GameData.GRID_H - 1 - q.y) \
-			else Vector2i(GameData.GRID_W - 1 - q.x, GameData.GRID_H - 1 - q.y)
-		var kind := (canon.x * 7 + canon.y * 13) % 3
+		var canon := _canonical(q)
+		var kind := obstacle_kind(q)
 		var orng := RandomNumberGenerator.new()
 		orng.seed = canon.x * 31 + canon.y
 		match kind:
