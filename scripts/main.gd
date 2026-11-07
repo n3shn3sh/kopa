@@ -1,6 +1,7 @@
 extends Node3D
 ## Monta a cena e conduz a partida: entrada do jogador, comandos, encenação e golpe final.
 ## Rodar com `-- --autoplay` faz a IA jogar pelos dois lados (teste automático).
+## `-- --cine-test[=<pasta>]` testa só a cinemática (ver README).
 
 var state: MatchState
 var arena: Arena
@@ -17,6 +18,11 @@ var hover := Vector2i(-99, -99)
 var autoplay := false
 var time_mult := 1.0
 var _showcase_dir := ""
+var _cine_test := false
+var _cine_dir := ""
+var _cine_final := false
+var _seed := -1
+var _capturing := false
 
 
 func _ready() -> void:
@@ -30,6 +36,13 @@ func _ready() -> void:
 		if a.begins_with("--shots="):
 			time_mult = 2.0
 			_capture_loop(a.substr(8))
+		if a == "--cine-test" or a.begins_with("--cine-test="):
+			_cine_test = true
+			_cine_dir = a.substr(12)
+		if a == "--cine-final":
+			_cine_final = true
+		if a.begins_with("--seed="):
+			_seed = a.substr(7).to_int()
 	_build_environment()
 	arena = Arena.new()
 	add_child(arena)
@@ -59,6 +72,8 @@ func _ready() -> void:
 	new_match()
 	if _showcase_dir != "":
 		_showcase()
+	elif _cine_test:
+		_run_cine_test()
 
 
 func _build_environment() -> void:
@@ -105,7 +120,7 @@ func new_match() -> void:
 	busy = false
 	Engine.time_scale = time_mult
 	state = MatchState.new()
-	state.setup(randi())
+	state.setup(randi() if _seed < 0 else _seed)
 	arena.build(state)
 	rebuild_views(state.snapshot())
 	rig.enabled = true
@@ -407,6 +422,87 @@ func _capture_loop(dir: String) -> void:
 		await get_tree().create_timer(1.2, true, false, true).timeout
 		var img := get_viewport().get_texture().get_image()
 		img.save_png("%s/shot_%03d.png" % [dir, i])
+		i += 1
+
+
+## Teste da cinemática: simula a partida inteira só na lógica (MatchState + TacticalAI, sem
+## animação), toca a cinemática em velocidade normal (com capturas densas se houver pasta) e
+## depois testa "Rever" com "Pular" no meio, na câmera lenta, no congelamento e logo no início.
+## Uso: -- --cine-test[=<pasta>] [--seed=N] [--cine-final (acelera tudo menos o trecho final)]
+func _run_cine_test() -> void:
+	busy = true
+	hud.set_gameplay_visible(false)
+	var guard := 0
+	while state.winner < 0 and guard < 2000:
+		guard += 1
+		var turn := state.turn_no
+		var plan := TacticalAI.decide(state)
+		if plan["move"] != state.active()["pos"]:
+			state.move_to(plan["move"])
+		if state.winner < 0 and state.turn_no == turn and plan["ab"] != "":
+			state.use_ability(plan["ab"], plan["target"])
+		if state.winner < 0 and state.turn_no == turn:
+			state.end_turn()
+	if state.winner < 0:
+		print("CINE_TEST_FALHA partida não terminou")
+		get_tree().quit(1)
+		return
+	print("CINE_TEST partida: turnos=%d eventos=%d" % [state.turn_no, state.events.size()])
+	cine.verbose = true
+	if _cine_final:
+		cine.preview_from = maxi(0, state.events.size() - 14)   # só o trecho final em velocidade normal
+	var t0 := Time.get_ticks_msec()
+	if _cine_dir != "":
+		_capturing = true
+		_dense_capture(_cine_dir, 0.4)
+	await _final_blow()
+	_capturing = false
+	print("CINE_TEST exibição completa: %.1f s, %d cortes" % [(Time.get_ticks_msec() - t0) / 1000.0, cine.cuts])
+	cine.verbose = false
+	# rever e pular no meio da montagem
+	_replay()
+	await get_tree().create_timer(3.0, true, false, true).timeout
+	cine.skip()
+	while cine.running:
+		await get_tree().process_frame
+	# rever e pular no começo da câmera lenta do golpe final
+	_replay()
+	while cine.running and cine.phase != "final":
+		await get_tree().process_frame
+	cine.skip()
+	while cine.running:
+		await get_tree().process_frame
+	# rever e pular durante o congelamento do golpe final
+	_replay()
+	while cine.running and cine.phase != "congelado":
+		await get_tree().process_frame
+	cine.skip()
+	while cine.running:
+		await get_tree().process_frame
+	# rever e pular logo de cara
+	_replay()
+	cine.skip()
+	while cine.running:
+		await get_tree().process_frame
+	# rever inteira de novo, acelerada, até o fim
+	cine.time_mult = 4.0
+	_replay()
+	while cine.running:
+		await get_tree().process_frame
+	cine.time_mult = time_mult
+	print("CINE_TEST_OK vencedor=J%d" % [state.winner + 1])
+	get_tree().quit()
+
+
+func _dense_capture(dir: String, every: float) -> void:
+	var i := 0
+	while _capturing:
+		await get_tree().create_timer(every, true, false, true).timeout
+		if not _capturing:
+			break
+		var img := get_viewport().get_texture().get_image()
+		if img:
+			img.save_png("%s/c%04d_%s.png" % [dir, i, cine.phase if cine.phase != "" else "fim"])
 		i += 1
 
 

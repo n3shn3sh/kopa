@@ -21,6 +21,18 @@ Teste automático, com a IA jogando pelos dois lados até a cinemática:
 godot --path . -- --autoplay
 ```
 
+Teste só da cinemática: simula a partida inteira na lógica (sem animação), toca a cinemática
+em velocidade normal, depois testa "Rever cinemática" com "Pular" no meio da montagem, no começo
+da câmera lenta, no congelamento do golpe final e logo no início, e revê uma vez inteira acelerada.
+Imprime cada plano escolhido e `CINE_TEST_OK` no fim. Com uma pasta, salva capturas a cada 0,4 s (nome com a fase:
+abertura, montagem, final, congelado, retomada, revelacao). `--seed=N` repete a mesma partida;
+`--cine-final` acelera a montagem e deixa só o trecho final em velocidade normal (para iterar no golpe final).
+
+```bash
+godot --headless --path . -- --cine-test --seed=7
+godot --path . --resolution 1600x900 -- --cine-test=/caminho/da/pasta --seed=7
+```
+
 Para gerar as imagens de vitrine (personagens e cenário) numa pasta:
 
 ```bash
@@ -95,7 +107,8 @@ scripts/
   world/     tabuleiro, personagens e câmera de jogo
   game/
     event_player.gd     encena eventos (usado no jogo e na cinemática)
-    cinematic_director.gd  cinemática do golpe final
+    cinematic_director.gd  cinemática do golpe final (montagem: planos e tempo)
+    cinematic_camera.gd    câmera da cinemática (enquadramento e movimento)
   ui/hud.gd  interface
   main.gd    liga tudo e trata a entrada do jogador
 ```
@@ -105,9 +118,32 @@ scripts/
   `MatchState.events`. O jogo só encena esses eventos.
 - **Golpe final.** O evento que encerra a partida vem marcado com `final`. O
   `main.gd` não o encena: chama o `CinematicDirector`, que recria o tabuleiro no
-  estado inicial e encena o registro inteiro em sequência, sem pausas entre
-  turnos e com uma câmera de cinema que acompanha a ação sem cortes. Só o último
-  golpe entra em câmera lenta, congela no impacto com a câmera girando e retoma.
+  estado inicial e encena o registro inteiro em sequência, sem pausas nem legendas
+  entre turnos. Só o último golpe entra em câmera lenta, congela no impacto e retoma.
+
+## Câmera da cinemática
+
+A câmera trabalha com **planos** (enquadramentos), não persegue pontos.
+
+- **Montagem.** Antes de começar, o diretor lê o registro inteiro, simula as posições
+  e agrupa os turnos em planos: um plano segura vários turnos enquanto a ação couber
+  no mesmo quadro (de 1,5 s a 4,5 s) e corta na troca de personagem quando não cabe.
+  Ação vizinha da anterior vira um movimento curto em vez de corte.
+- **Enquadramento.** Cada personagem é uma caixa com o tamanho real do modelo. A
+  distância sai do FOV: é a menor que põe todas as caixas dentro da área útil da tela
+  (entre as faixas de cinema, com margem e espaço sobre a cabeça), com limites mínimo e máximo.
+- **Ângulo.** Vários ângulos são testados por plano e vence o melhor: lateral ao eixo
+  da ação, sem obstáculo (rochas, ruínas, pinheiros) nem personagem na frente, longe do
+  cenário fora do tabuleiro. A câmera fica sempre do lado do público (regra dos 180°:
+  Jogador 1 à esquerda, Jogador 2 à direita) e evita cortar para um ângulo quase igual.
+- **Movimento.** Câmera estável; dentro do plano só um push-in lento. A pose é suavizada
+  por mola criticamente amortecida, em tempo real (não sofre com `Engine.time_scale`).
+  A orientação vem de yaw/pitch, sem `look_at`.
+- **Golpe final.** Plano de preparação com o atacante e o alvo; no golpe, corte para um
+  plano baixo (contra-plongée leve) com lente mais longa: lateral se estão perto, por cima
+  do ombro do atacante se o alvo está longe. Push-in lento durante a câmera lenta e o
+  congelamento (com um arco curto), deixando o terço de baixo livre para a legenda. Depois,
+  a câmera se afasta para um plano aberto e estável do time vencedor.
 - **PvP online (próximo passo).** Como toda a partida vem dos comandos, basta
   sincronizar os comandos entre os jogadores, com um servidor validando. Cada
   aparelho monta a cinemática localmente, sem transmitir vídeo.
